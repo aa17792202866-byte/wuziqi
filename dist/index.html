@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>对弈 · 联机五子棋</title>
+<meta name="description" content="创建房间，邀请好友，在各自的设备上实时对战五子棋。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23c79559'/%3E%3Ccircle cx='12' cy='12' r='7' fill='%23252624'/%3E%3Ccircle cx='22' cy='22' r='7' fill='%23fffaf0'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><a class="brand" href="./"><span class="brand-icon">●<i>●</i></span>对弈<span class="brand-sub">五子棋</span></a><span class="mode"><span></span>双人联机</span></header>
+<main>
+<section class="play-area" aria-label="五子棋对局">
+<div class="board-heading"><div><span class="eyebrow">GOMOKU / 五子棋</span><h1>落子，见高下。</h1></div><span class="board-size">15 × 15 棋盘</span></div>
+<div class="board-frame"><div id="board" role="grid" aria-label="15行15列五子棋盘"></div></div>
+<div class="board-caption"><span><b class="small-dot"></b> 黑棋先行 · 连成五子即获胜</span><span id="last-move">等待第一手</span></div>
+</section>
+<aside>
+<section id="lobby" class="lobby"><h2>邀一位对手</h2><p>创建房间，或输入好友的房间码。</p><button id="create-room" class="lobby-create">创建房间 · 执黑先行</button><form id="join-form"><label for="room-code">房间码</label><div class="join-row"><input id="room-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6 位数字" required autocomplete="off"><button type="submit">加入</button></div></form></section>
+<section id="room-info" class="room-info" hidden><span id="my-color"></span><strong id="room-label"></strong><button id="copy-code">复制房间码</button><button id="leave-room">返回大厅</button></section>
+<p id="connection" class="connection" aria-live="polite">创建房间后即可邀请好友</p><p id="error" role="alert" hidden></p>
+<section id="request-box" class="request-box" hidden><p id="request-text"></p><div class="actions"><button id="accept">同意</button><button id="reject">拒绝</button><button id="cancel-request">撤回请求</button></div></section>
+<div class="match-label">本局对战<span>自由规则</span></div>
+<section class="status-card" aria-live="polite"><span class="eyebrow" id="phase">轮到你了</span><h2 id="status">黑方落子</h2><p id="hint">点击棋盘交叉点，开始这场对弈。</p><div class="players"><div id="black-player" class="player active"><span class="stone black"></span><div><strong>黑方</strong><small>先手</small></div><span class="turn-mark">当前</span></div><div id="white-player" class="player"><span class="stone white"></span><div><strong>白方</strong><small>后手</small></div><span class="turn-mark">当前</span></div></div><div class="stats"><span>已落子 <b id="moves">00</b></span><span>对局用时 <b id="time">00:00</b></span></div></section>
+<div class="actions"><button id="restart" class="primary">↻ <span>重新开始</span></button><button id="undo" disabled>↶ <span>悔一步</span></button></div>
+<label class="switch-row" for="numbers"><span>显示落子顺序</span><input type="checkbox" id="numbers"></label>
+<section class="rules"><h3>简单规则，认真对弈</h3><p>两位玩家轮流落子。横向、纵向或斜向，率先连成五颗或更多同色棋子的一方获胜。</p><p>本局不设禁手。棋子落下后不可移动，可使用「悔一步」撤回最近一手。</p></section>
+<p class="keyboard-tip">键盘也能玩：方向键移动，回车落子。</p>
+</aside>
+</main>
+<section class="network"><h3>邀请另一台设备</h3><p>连接同一 Wi-Fi，打开下面的地址，再输入房间码。请保持这台电脑和启动窗口运行。</p><div id="lan-addresses">正在读取本机地址…</div></section>
+<footer>两个人，一张棋盘。<span>实时对战 · 无需登录</span></footer>
+<script src="app.js"></script>
+</body></html>

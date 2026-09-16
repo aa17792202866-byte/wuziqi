@@ -1,0 +1,4 @@
+[ 1685607ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:3210/api/rooms/530159/events?token=d11898618e21f3840a2798df002d1c60da3579d071734f95:0
+[ 1685611ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:3210/api/rooms/530159/state:0
+[ 2215087ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:3210/api/rooms/530159/events?token=d11898618e21f3840a2798df002d1c60da3579d071734f95:0
+[ 2215090ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:3210/api/rooms/530159/state:0
