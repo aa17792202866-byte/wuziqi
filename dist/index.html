@@ -1,34 +1,32 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>对弈 · 联机五子棋</title>
-<meta name="description" content="创建房间，邀请好友，在各自的设备上实时对战五子棋。">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>对弈 · 联机五子棋</title><meta name="description" content="邀请好友对弈，收藏每一局。局域网双人五子棋。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23c79559'/%3E%3Ccircle cx='12' cy='12' r='7' fill='%23252624'/%3E%3Ccircle cx='22' cy='22' r='7' fill='%23fffaf0'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css"><script src="app.js" defer></script>
 </head>
 <body>
-<header><a class="brand" href="./"><span class="brand-icon">●<i>●</i></span>对弈<span class="brand-sub">五子棋</span></a><span class="mode"><span></span>双人联机</span></header>
-<main>
-<section class="play-area" aria-label="五子棋对局">
-<div class="board-heading"><div><span class="eyebrow">GOMOKU / 五子棋</span><h1>落子，见高下。</h1></div><span class="board-size">15 × 15 棋盘</span></div>
-<div class="board-frame"><div id="board" role="grid" aria-label="15行15列五子棋盘"></div></div>
-<div class="board-caption"><span><b class="small-dot"></b> 黑棋先行 · 连成五子即获胜</span><span id="last-move">等待第一手</span></div>
+<header class="shell"><a class="brand" href="/" aria-label="对弈首页"><span class="logo">●<i>●</i></span>对弈 <small>五子棋</small></a><nav id="nav" hidden><button data-view="lobby">大厅</button><button id="current-room" data-view="room" hidden>当前对局</button><button data-view="history">我的对局</button></nav><div id="account-bar" hidden><button id="nickname-button"></button><button id="logout" class="quiet">退出</button></div><span id="guest-label" class="muted">双人联机 · 每一局都值得回味</span></header>
+<div class="shell banners"><p id="connection" role="status" hidden></p><div id="error" role="alert" hidden><span id="error-text"></span><button id="retry" hidden>重试保存</button><button id="dismiss-error" aria-label="关闭提示">×</button></div><p id="toast" role="status" hidden></p><div id="incoming-alert" hidden><span id="incoming-text"></span><button id="open-invites">查看邀请</button></div></div>
+<main class="shell">
+<section id="auth-view" class="auth-layout" hidden>
+ <div class="welcome"><span class="eyebrow">GOMOKU / 双人五子棋</span><h1>落子，<br>见高下。</h1><p>邀一位对手，认真下一局。<br>从第一手，到值得回味的每一步。</p><div class="welcome-board" aria-hidden="true"><span class="stone black"></span><span class="stone white"></span><span class="stone black"></span></div><span class="small muted">15 × 15 棋盘 / 自由规则 / 棋谱复盘</span></div>
+ <section class="card auth-card"><div class="tabs"><button id="login-tab" class="selected">登录</button><button id="register-tab">注册账号</button></div><h2 id="auth-title">欢迎回来</h2><p id="auth-description" class="muted">登录后，在大厅与好友相遇。</p><form id="auth-form"><label>账号<input id="account" name="account" autocomplete="username" minlength="4" maxlength="20" pattern="[A-Za-z0-9_]{4,20}" placeholder="4～20 位字母、数字或下划线" required></label><label id="nickname-field" hidden>昵称<input id="nickname" name="nickname" minlength="2" maxlength="20" placeholder="你的对弈名字"></label><label>密码<input id="password" name="password" type="password" minlength="8" maxlength="64" autocomplete="current-password" placeholder="8～64 个字符" required></label><label id="confirm-field" hidden>确认密码<input id="confirm-password" name="confirmPassword" type="password" minlength="8" maxlength="64" autocomplete="new-password" placeholder="再次输入密码"></label><button id="auth-submit" class="primary wide" type="submit">登录并进入大厅</button></form><p class="small muted">账号与棋谱保存在这台服务器电脑。<br>请妥善保管密码，暂不提供自助找回。</p></section>
 </section>
-<aside>
-<section id="lobby" class="lobby"><h2>邀一位对手</h2><p>创建房间，或输入好友的房间码。</p><button id="create-room" class="lobby-create">创建房间 · 执黑先行</button><form id="join-form"><label for="room-code">房间码</label><div class="join-row"><input id="room-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6 位数字" required autocomplete="off"><button type="submit">加入</button></div></form></section>
-<section id="room-info" class="room-info" hidden><span id="my-color"></span><strong id="room-label"></strong><button id="copy-code">复制房间码</button><button id="leave-room">返回大厅</button></section>
-<p id="connection" class="connection" aria-live="polite">创建房间后即可邀请好友</p><p id="error" role="alert" hidden></p>
-<section id="request-box" class="request-box" hidden><p id="request-text"></p><div class="actions"><button id="accept">同意</button><button id="reject">拒绝</button><button id="cancel-request">撤回请求</button></div></section>
-<div class="match-label">本局对战<span>自由规则</span></div>
-<section class="status-card" aria-live="polite"><span class="eyebrow" id="phase">轮到你了</span><h2 id="status">黑方落子</h2><p id="hint">点击棋盘交叉点，开始这场对弈。</p><div class="players"><div id="black-player" class="player active"><span class="stone black"></span><div><strong>黑方</strong><small>先手</small></div><span class="turn-mark">当前</span></div><div id="white-player" class="player"><span class="stone white"></span><div><strong>白方</strong><small>后手</small></div><span class="turn-mark">当前</span></div></div><div class="stats"><span>已落子 <b id="moves">00</b></span><span>对局用时 <b id="time">00:00</b></span></div></section>
-<div class="actions"><button id="restart" class="primary">↻ <span>重新开始</span></button><button id="undo" disabled>↶ <span>悔一步</span></button></div>
-<label class="switch-row" for="numbers"><span>显示落子顺序</span><input type="checkbox" id="numbers"></label>
-<section class="rules"><h3>简单规则，认真对弈</h3><p>两位玩家轮流落子。横向、纵向或斜向，率先连成五颗或更多同色棋子的一方获胜。</p><p>本局不设禁手。棋子落下后不可移动，可使用「悔一步」撤回最近一手。</p></section>
-<p class="keyboard-tip">键盘也能玩：方向键移动，回车落子。</p>
-</aside>
+<section id="lobby-view" hidden>
+ <div class="section-heading"><div><span class="eyebrow">相逢棋局间</span><h1>对弈大厅</h1></div><span id="online-count" class="badge"></span></div>
+ <div class="lobby-layout"><section class="card"><div class="card-heading"><h2>在线棋友</h2><span class="small muted">空闲玩家可直接邀请</span></div><div id="player-list"></div></section><aside class="stack"><section class="card"><h2>开始一局</h2><p class="muted">直接邀请棋友，或使用房间码相约。</p><button id="create-room" class="primary wide">创建房间 · 执黑先行</button><form id="join-form"><label for="room-code">已有房间码？</label><div class="join-row"><input id="room-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6 位数字" required><button type="submit">加入</button></div></form><p id="lobby-room-note" class="small muted"></p></section><section class="card"><h2>对战邀请</h2><div id="invite-list"></div></section></aside></div>
+</section>
+<section id="room-view" hidden>
+ <div class="section-heading"><div><span class="eyebrow" id="room-code-label"></span><h1 id="room-heading">准备对弈</h1></div><button id="leave-room" class="quiet">离开房间</button></div>
+ <div class="game-layout"><section><div class="board-frame"><div id="board" class="board" role="grid" aria-label="五子棋盘"></div></div><div class="board-caption"><span>黑棋先行 · 五子连线获胜</span><span id="last-move">等待第一手</span></div><label class="check"><input type="checkbox" id="numbers">显示落子顺序</label></section><aside class="stack"><section class="card"><span class="eyebrow" id="phase"></span><h2 id="game-status" aria-live="polite"></h2><p id="game-hint" class="muted"></p><div id="room-players"></div><div class="stats"><span>已落子<b id="moves">00</b></span><span>对局用时<b id="time">00:00</b></span></div></section><div id="prepare-controls" class="stack"><button id="ready" class="primary wide">准备</button><button id="swap" class="wide">让对方先手</button></div><div id="game-controls" class="button-grid"><button id="undo">悔一步</button><button id="restart">重新开始</button><button id="resign" class="danger">投降</button><button id="view-result">复盘本局</button></div><section id="request-box" class="card request" hidden><p id="request-text"></p><div class="button-grid"><button id="accept" class="primary">同意</button><button id="reject">拒绝</button><button id="cancel-request">撤回请求</button></div></section><section class="rules"><h3>简单规则，认真对弈</h3><p>横、竖或斜向，连续五颗及以上同色棋子获胜。本局不设禁手。</p><p>悔棋与重开需要对方同意。投降由自己确认，立即结束本局。</p></section></aside></div>
+</section>
+<section id="history-view" hidden><div class="section-heading"><div><span class="eyebrow">每一步，都有迹可循</span><h1>我的对局</h1></div><label class="filter">结果<select id="history-filter"><option value="all">全部对局</option><option value="win">胜局</option><option value="loss">负局</option><option value="draw">平局</option><option value="restart">双方重开</option></select></label></div><div id="history-list" class="stack"></div><div class="pagination"><button id="history-prev">上一页</button><span id="history-page"></span><button id="history-next">下一页</button></div></section>
+<section id="replay-view" hidden><div class="section-heading"><div><span class="eyebrow">棋谱复盘 · 只读</span><h1 id="replay-title">回看这一局</h1></div><button id="back-history">返回我的对局</button></div><div class="game-layout"><section><div class="board-frame"><div id="replay-board" class="board show-numbers" role="grid" aria-label="复盘棋盘"></div></div><div class="board-caption"><span id="replay-step"></span><span>← → 切换步数</span></div><label class="range-label">复盘进度<input id="replay-range" type="range" min="0" max="0" value="0"></label><div class="replay-controls"><button id="replay-first">开局</button><button id="replay-prev">上一步</button><button id="replay-play" class="primary">播放</button><button id="replay-next">下一步</button><button id="replay-last">终局</button><select id="replay-speed" aria-label="播放速度"><option value="1500">慢速</option><option value="800" selected>正常</option><option value="350">快速</option></select></div></section><aside class="stack"><section class="card"><h2 id="replay-result"></h2><p id="replay-meta" class="muted"></p><p id="replay-current"></p></section><section class="card"><h2>落子记录</h2><div id="replay-moves" class="move-list"></div></section><details class="card"><summary>对局事件（含悔棋）</summary><div id="replay-events"></div></details></aside></div></section>
 </main>
-<section class="network"><h3>邀请另一台设备</h3><p>连接同一 Wi-Fi，打开下面的地址，再输入房间码。请保持这台电脑和启动窗口运行。</p><div id="lan-addresses">正在读取本机地址…</div></section>
-<footer>两个人，一张棋盘。<span>实时对战 · 无需登录</span></footer>
-<script src="app.js"></script>
+<section id="network" class="shell network"><h3>邀请另一台设备</h3><p>连接同一局域网，打开下方地址并登录。请保持这台电脑和启动窗口运行。</p><div id="lan-addresses"></div></section>
+<footer class="shell"><span>两个人，一张棋盘。</span><span>本地运行 · 实时对战 · 棋谱留存</span></footer>
+<dialog id="nickname-dialog"><form id="nickname-form"><h2>修改昵称</h2><label>新昵称<input id="new-nickname" minlength="2" maxlength="20" required></label><p class="muted">历史棋谱保留当时的名字。</p><div class="button-grid"><button type="button" id="close-nickname">取消</button><button class="primary" type="submit">保存</button></div></form></dialog>
 </body></html>
+

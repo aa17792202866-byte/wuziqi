@@ -1,0 +1,66 @@
+async (page) => {
+ const failures=[];
+ page.on('pageerror',e=>failures.push(e.message));
+ const suffix=String(Date.now()).slice(-7),password='Browser-QA-password';
+ if(await page.getByRole('button',{name:'退出',exact:true}).isVisible()){page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'退出',exact:true}).click();await page.getByRole('button',{name:'注册账号',exact:true}).waitFor()}
+ const secondContext=await page.context().browser().newContext({viewport:{width:390,height:844}});
+ const second=await secondContext.newPage();second.on('pageerror',e=>failures.push(e.message));
+ await second.goto('http://localhost:3211');
+ async function register(p,account,nickname){await p.getByRole('button',{name:'注册账号',exact:true}).click();await p.getByLabel('账号',{exact:true}).fill(account);await p.getByLabel('昵称',{exact:true}).fill(nickname);await p.getByLabel('密码',{exact:true}).fill(password);await p.getByLabel('确认密码',{exact:true}).fill(password);await p.getByRole('button',{name:'注册并进入大厅',exact:true}).click();await p.getByRole('heading',{name:'对弈大厅',exact:true}).waitFor();await p.getByText('已连接 · 状态实时同步',{exact:true}).waitFor()}
+ await register(page,'qa_a_'+suffix,'青松'+suffix);await register(second,'qa_b_'+suffix,'白露'+suffix);
+ await page.locator('.player-row').filter({hasText:'白露'+suffix}).getByRole('button',{name:'邀请对战'}).click();
+ await second.getByRole('button',{name:'接受',exact:true}).click();
+ await page.getByRole('heading',{name:'准备中',exact:true}).waitFor();
+ await second.getByRole('heading',{name:'准备中',exact:true}).waitFor();
+ await second.getByRole('button',{name:'申请先手',exact:true}).click();
+ await page.getByRole('button',{name:'同意',exact:true}).click();
+ await page.getByRole('button',{name:'申请先手',exact:true}).waitFor();
+ await second.getByRole('button',{name:'让对方先手',exact:true}).click();
+ await page.getByRole('button',{name:'让对方先手',exact:true}).waitFor();
+ await page.getByRole('button',{name:'准备',exact:true}).click();
+ await second.getByRole('button',{name:'准备',exact:true}).click();
+ await page.getByRole('heading',{name:'对局中',exact:true}).waitFor();
+ await page.getByRole('gridcell',{name:'8行8列，空位',exact:true}).click();
+ await second.getByRole('gridcell',{name:'8行8列，黑棋',exact:true}).waitFor();
+ await second.getByRole('gridcell',{name:'8行9列，空位',exact:true}).click();
+ await page.getByRole('gridcell',{name:'8行9列，白棋',exact:true}).waitFor();
+ await page.getByRole('button',{name:'悔一步',exact:true}).click();
+ await second.getByRole('button',{name:'同意',exact:true}).click();
+ await page.getByRole('gridcell',{name:'8行9列，空位',exact:true}).waitFor();
+ await second.reload();await second.getByText('已连接 · 状态实时同步',{exact:true}).waitFor();
+ if(await second.locator('#moves').innerText()!=='01')throw new Error('Refresh lost moves');
+ await second.getByRole('gridcell',{name:'9行9列，空位',exact:true}).click();
+ await page.getByRole('gridcell',{name:'9行9列，白棋',exact:true}).waitFor();
+ await page.getByRole('gridcell',{name:'8行7列，空位',exact:true}).click();
+ await second.getByRole('gridcell',{name:'8行7列，黑棋',exact:true}).waitFor();
+ await second.screenshot({path:'output/playwright/v2-mobile-game.png',fullPage:true});
+ second.once('dialog',d=>d.accept());await second.getByRole('button',{name:'投降',exact:true}).click();
+ await page.getByRole('heading',{name:'白方投降，黑方获胜',exact:true}).waitFor();
+ await page.getByRole('button',{name:'复盘本局',exact:true}).click();
+ await page.getByRole('heading',{name:'青松'+suffix+' vs 白露'+suffix,exact:true}).waitFor();
+ await page.getByRole('button',{name:'终局',exact:true}).click();
+ if(await page.locator('#replay-step').innerText()!=='第 3 / 3 手')throw new Error('Replay step mismatch');
+ await page.getByRole('button',{name:'上一步',exact:true}).click();
+ if(await page.locator('#replay-board .stone').count()!==2)throw new Error('Replay backward failed');
+ await page.getByRole('button',{name:'开局',exact:true}).click();
+ await page.getByRole('button',{name:'播放',exact:true}).click();
+ await page.getByText('第 3 / 3 手',{exact:true}).waitFor();
+ await page.screenshot({path:'output/playwright/v2-replay.png',fullPage:true});
+ await page.getByRole('button',{name:'返回我的对局',exact:true}).click();
+ await page.getByRole('button',{name:'复盘',exact:true}).waitFor();
+ await page.getByRole('combobox',{name:'结果',exact:true}).selectOption('win');await page.getByRole('button',{name:'复盘',exact:true}).waitFor();
+ await page.getByRole('button',{name:'当前对局',exact:true}).click();
+ await page.getByRole('button',{name:'重新开始',exact:true}).click();
+ await second.getByRole('button',{name:'同意',exact:true}).click();
+ await page.getByRole('heading',{name:'准备中',exact:true}).waitFor();
+ page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'离开房间',exact:true}).click();
+ await page.getByRole('heading',{name:'对弈大厅',exact:true}).waitFor();
+ await page.screenshot({path:'output/playwright/v2-lobby.png',fullPage:true});
+ await second.getByRole('button',{name:'我的对局',exact:true}).click();await second.getByRole('button',{name:'复盘',exact:true}).waitFor();
+ if(await second.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw new Error('Mobile layout overflows');
+ const cookies=await page.context().cookies();const session=cookies.find(c=>c.name==='gomoku_session');if(!session?.httpOnly||session.expires<0)throw new Error('Cookie not persistent or HttpOnly');
+ if(failures.length)throw new Error(failures.join('; '));
+ await secondContext.close();
+ return {passed:true,flows:['register','invite','swap consent','give first move','ready','moves','undo','refresh','resign','history filter','replay','auto playback','restart','mobile layout','HttpOnly session'],accounts:['qa_a_'+suffix,'qa_b_'+suffix]};
+}
+
