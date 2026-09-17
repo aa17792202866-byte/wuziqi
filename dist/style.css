@@ -4,3 +4,5 @@
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 
 #incoming-alert{background:#e8eddb;display:flex;justify-content:space-between;align-items:center;gap:15px}#incoming-alert button{font-size:13px}
+
+.ai-settings{max-width:550px}.ai-settings form{display:grid;gap:20px}#open-ai{margin-bottom:12px}.section-heading:has(.filter){flex-wrap:wrap}.section-heading:has(.filter)>div{flex:1}.section-heading .filter{font-size:13px}

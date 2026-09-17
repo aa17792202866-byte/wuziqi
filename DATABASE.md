@@ -73,3 +73,7 @@ node scripts/backup.js D:/backups/gomoku-snapshot.sqlite
 
 - [Node.js SQLite 文档](https://nodejs.org/api/sqlite.html)
 - [Node.js scrypt 文档](https://nodejs.org/api/crypto.html#cryptoscryptpassword-salt-keylen-options-callback)
+
+## V1.1 数据迁移
+
+`002-ai.sql` 将历史对局迁移到包含 `mode` 的新表，旧记录统一标记为 `online`；保留主键、棋谱和时间。系统电脑的黑/白玩家列允许为 NULL，`winner_id` 可为 `computer`，不会产生注册账号。活跃房间快照增加模式、难度、原始颜色设置和人类颜色。备份和恢复方法不变。

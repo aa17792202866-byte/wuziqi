@@ -32,7 +32,7 @@ class Store {
   room.version++;
   this.run('INSERT INTO rooms VALUES (?,?) ON CONFLICT(code) DO UPDATE SET payload=excluded.payload',room.code,JSON.stringify(room));
   this.run('DELETE FROM seats WHERE room_code=?',room.code);
-  for(const id of room.players)if(id)this.run('INSERT INTO seats VALUES (?,?)',id,room.code);
+  for(const id of room.players)if(id&&id!=='computer')this.run('INSERT INTO seats VALUES (?,?)',id,room.code);
  }
  notify(ids,message){for(const id of new Set(ids.filter(Boolean)))this.run('INSERT INTO notifications(user_id,message,created_at) VALUES (?,?,?)',id,message,Date.now())}
  close(){this.db.close()}

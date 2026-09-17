@@ -7,6 +7,7 @@ const {promisify}=require('node:util');
 const {Store}=require('./store');
 const {Service,fail}=require('./service');
 const {acquireServerLock}=require('./server-lock');
+const {AIManager}=require('./ai-manager');
 const scrypt=promisify(crypto.scrypt);
 const hash=value=>crypto.createHash('sha256').update(value).digest('hex');
 const SESSION_AGE=7*24*60*60*1000;
@@ -17,6 +18,7 @@ function createServer(options={}){
  const releaseLock=acquireServerLock(dbPath);
  let store,service;
  try{store=new Store(dbPath);service=new Service(store,options)}catch(error){store?.close();releaseLock();throw error}
+ const aiManager=new AIManager(service);service.aiManager=aiManager;
  const limits=new Map();let closing=false,authJobs=0;
  const now=options.now||Date.now;
  const files={'/':'index.html','/index.html':'index.html','/style.css':'style.css','/game.js':'game.js','/app.js':'app.js'};
@@ -78,7 +80,7 @@ function createServer(options={}){
    }
    if(req.method==='GET'&&url.pathname==='/api/history'){
     const page=Number(url.searchParams.get('page')||1);if(!Number.isInteger(page)||page<1||page>100000)fail('页码无效',400);
-    return json(res,200,service.history(uid,page,url.searchParams.get('result')||'all'));
+    return json(res,200,service.history(uid,page,url.searchParams.get('result')||'all',url.searchParams.get('mode')||'all'));
    }
    const replay=url.pathname.match(/^\/api\/history\/([a-f0-9-]{36})$/);
    if(req.method==='GET'&&replay)return json(res,200,service.replay(uid,replay[1]));
@@ -102,6 +104,7 @@ function createServer(options={}){
  const timer=setInterval(()=>{
   try{
    service.sweep();
+   aiManager.sync();
    for(const connections of service.connections.values())for(const c of [...connections]){
     if(!store.get('SELECT token_hash FROM sessions WHERE token_hash=? AND expires_at>?',c.tokenHash,now())){c.res.write('event: expired\ndata: {}\n\n');c.res.end()}
     else if(ticks%10===0)c.res.write(': heartbeat\n\n');
@@ -111,7 +114,7 @@ function createServer(options={}){
  },options.tickMs||1000);timer.unref();
  server.store=store;server.service=service;
  let shutdownPromise;
- server.shutdown=()=>shutdownPromise||=(async()=>{closing=true;clearInterval(timer);for(const connections of service.connections.values())for(const c of connections)c.res.end();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));store.close();releaseLock()})();
+ server.shutdown=()=>shutdownPromise||=(async()=>{closing=true;clearInterval(timer);aiManager.close();for(const connections of service.connections.values())for(const c of connections)c.res.end();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));store.close();releaseLock()})();
  return server;
 }
 if(require.main===module){

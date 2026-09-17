@@ -1,0 +1,16 @@
+async (page)=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));const account='aiqa_'+String(Date.now()).slice(-7); if(await page.getByRole('button',{name:'退出',exact:true}).isVisible()){page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'退出',exact:true}).click();await page.getByRole('button',{name:'注册账号',exact:true}).waitFor()}
+ await page.getByRole('button',{name:'注册账号',exact:true}).click();await page.getByLabel('账号',{exact:true}).fill(account);await page.getByLabel('昵称',{exact:true}).fill('人机测试棋手');await page.getByLabel('密码',{exact:true}).fill('AI-test-password');await page.getByLabel('确认密码',{exact:true}).fill('AI-test-password');await page.getByRole('button',{name:'注册并进入大厅',exact:true}).click();await page.getByRole('heading',{name:'对弈大厅',exact:true}).waitFor();
+ await page.getByRole('button',{name:'人机对战',exact:true}).click();await page.getByRole('combobox',{name:'难度',exact:true}).selectOption('hard');await page.getByRole('combobox',{name:'玩家执棋',exact:true}).selectOption('white');await page.getByRole('button',{name:'开始对局',exact:true}).click();await page.getByRole('heading',{name:'人机对战',exact:true}).waitFor();await page.waitForFunction(()=>document.querySelector('#moves').textContent==='01');
+ if(!await page.getByRole('button',{name:'悔一步',exact:true}).isDisabled())throw new Error('Opening should not allow undo');
+ await page.getByRole('gridcell',{name:'8行9列，空位',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#moves').textContent==='03');
+ await page.getByRole('button',{name:'悔一步',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#moves').textContent==='01');
+ await page.reload();await page.getByRole('heading',{name:'人机对战',exact:true}).waitFor();
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:'output/playwright/ai-mobile.png',fullPage:true});if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw new Error('Mobile overflow');
+ page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'投降',exact:true}).click();await page.getByRole('heading',{name:'白方投降，黑方获胜',exact:true}).waitFor();
+ await page.getByRole('button',{name:'复盘本局',exact:true}).click();await page.getByRole('button',{name:'终局',exact:true}).click();if(await page.locator('#replay-board .stone').count()!==1)throw new Error('Replay mismatch');await page.getByRole('button',{name:'返回我的对局',exact:true}).click();await page.getByRole('combobox',{name:'类型',exact:true}).selectOption('ai');await page.getByRole('combobox',{name:'结果',exact:true}).selectOption('loss');await page.getByRole('button',{name:'复盘',exact:true}).waitFor();
+ await page.getByRole('button',{name:'当前对局',exact:true}).click();page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'再来一局',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#moves').textContent==='01');
+ const g=await page.evaluate(async()=>(await (await fetch('/api/state')).json()).room.game.id);await page.waitForTimeout(200);if((await page.evaluate(async()=>(await (await fetch('/api/state')).json()).room.game.id))!==g)throw new Error('Game mismatch');
+ await page.evaluate(()=>document.documentElement.dataset.aiQA='passed');if(errors.length)throw new Error(errors.join(';'));return {passed:true,account};
+}
+

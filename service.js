@@ -10,14 +10,14 @@ class Service {
   store.transaction(()=>{for(const room of store.rooms()){room.ready=[false,false];room.pending=null;store.saveRoom(room)}store.run("UPDATE invitations SET status='expired' WHERE status='pending'")});
  }
  online(id){return !!this.connections.get(id)?.size}
- status(id){if(!this.online(id))return 'reconnecting';return this.store.roomFor(id)?.phase||'idle'}
- both(room){return room.players.every(id=>id&&this.online(id))}
+ status(id){if(!this.online(id))return 'reconnecting';const room=this.store.roomFor(id);return room?.mode==='ai'&&room.phase==='playing'?'ai':room?.phase||'idle'}
+ both(room){return room.players.every(id=>id&&(id==='computer'||this.online(id)))}
  snapshot(id){
   const s=this.store,room=s.roomFor(id),now=this.now();
   const players=[...new Set([...this.connections.keys(),...this.lastSeen.keys()])].filter(uid=>this.online(uid)||now-(this.lastSeen.get(uid)||0)<this.offlineGrace).map(uid=>({...s.player(uid),status:this.status(uid),online:this.online(uid)})).filter(u=>u.id).sort((a,b)=>(a.status==='idle'?0:1)-(b.status==='idle'?0:1)||a.nickname.localeCompare(b.nickname));
   const invitations=s.all("SELECT i.*,a.nickname AS senderName,b.nickname AS recipientName FROM invitations i JOIN users a ON a.id=i.sender JOIN users b ON b.id=i.recipient WHERE (sender=? OR recipient=?) AND status='pending'",id,id);
   const result={revision:s.revision,serverTime:now,me:s.user(id),players,invitations,room:null,notifications:s.all('SELECT id,message,created_at FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 15',id),storageError:this.storageError};
-  if(room)result.room={...room,players:room.players.map(uid=>uid?{...s.player(uid),online:this.online(uid)}:null),myColor:room.players.indexOf(id)+1,turn:room.game.history.length%2+1};
+  if(room)result.room={...room,players:room.players.map(uid=>uid==='computer'?{id:'computer',nickname:'电脑',online:true,system:true}:uid?{...s.player(uid),online:this.online(uid)}:null),myColor:room.players.indexOf(id)+1,turn:room.game.history.length%2+1,aiError:this.aiManager?.errors.get(room.code)||null};
   return result;
  }
  broadcast(){for(const [id,connections]of this.connections){let data;try{data='data: '+JSON.stringify(this.snapshot(id))+'\n\n'}catch{continue}for(const c of connections){if(!c.res.destroyed)c.res.write(data)}}}
@@ -38,14 +38,30 @@ class Service {
   const s=this.store,g=room.game;if(room.phase!=='playing')fail('本局已经结束或尚未开始');
   g.reason=reason;g.winner=winner;g.endedAt=this.now();g.draw=reason==='draw';if(reason!=='five')g.line=[];
   g.events.push({id:randomUUID(),type:reason,actor,at:this.now()});room.phase='ended';room.pending=null;room.ready=[false,false];
-  s.run('INSERT INTO matches VALUES (?,?,?,?,?,?,?,?)',g.id,g.participants[0].id,g.participants[1].id,winner?g.participants[winner-1].id:null,reason,g.startedAt,g.endedAt,JSON.stringify(g));
+  s.run('INSERT INTO matches (id,black_id,white_id,winner_id,reason,started_at,ended_at,payload,mode) VALUES (?,?,?,?,?,?,?,?,?)',g.id,g.participants[0].id==='computer'?null:g.participants[0].id,g.participants[1].id==='computer'?null:g.participants[1].id,winner?g.participants[winner-1].id:null,reason,g.startedAt,g.endedAt,JSON.stringify(g),room.mode||'online');
  }
  leave(id,confirmed){const s=this.store,room=s.roomFor(id);if(!room)return;if(room.phase==='playing'){if(confirmed!==true)fail('离开将按投降处理，请先确认',400);this.finish(room,'resign',room.players.indexOf(id)===0?2:1,id)}const index=room.players.indexOf(id);room.players[index]=null;room.ready=[false,false];room.pending=null;
-  if(!room.players.some(Boolean)){s.run('DELETE FROM rooms WHERE code=?',room.code);return}
+  if(room.mode==='ai'||!room.players.some(Boolean)){s.run('DELETE FROM rooms WHERE code=?',room.code);return}
   if(room.phase!=='ended'){room.phase='waiting';room.game=newGame()}
   s.saveRoom(room);s.notify(room.players,'对方已离开房间。');
  }
  swap(room){room.players.reverse();room.ready=[false,false];room.pending=null;this.store.notify(room.players,'先后手已交换，请重新准备。')}
+ createAI(id,difficulty='normal',color='black'){
+  if(!['easy','normal','hard'].includes(difficulty)||!['black','white','random'].includes(color))fail('人机设置无效',400);
+  const room=this.createRoom(id);room.mode='ai';room.difficulty=difficulty;room.colorSetting=color;this.resetAI(room,id);this.store.saveRoom(room);return room;
+ }
+ resetAI(room,id){
+  room.humanColor=room.colorSetting==='random'?randomInt(1,3):room.colorSetting==='white'?2:1;
+  room.players=room.humanColor===1?[id,'computer']:['computer',id];room.ready=[false,false];room.pending=null;room.phase='playing';
+  room.game={...newGame(),mode:'ai',difficulty:room.difficulty,colorSetting:room.colorSetting,startedAt:this.now(),participants:room.players.map(uid=>uid==='computer'?{id:'computer',nickname:'电脑',system:true}:this.store.player(uid))};
+  room.game.events.push({id:randomUUID(),type:'start',at:this.now()});
+ }
+ place(room,row,col,color,id){
+  const g=room.game;if(room.phase!=='playing'||g.history.length%2+1!==color)fail('现在不能落子');
+  const game=engine(g);if(!game.play(row,col))fail('这里已有棋子');Object.assign(g,{board:game.board,history:game.history,winner:game.winner,line:game.line,draw:game.draw});
+  Object.assign(g.history.at(-1),{id:randomUUID(),at:this.now(),ply:g.history.length,playerId:id});g.events.push({type:'move',...g.history.at(-1)});
+  if(g.winner)this.finish(room,'five',g.winner,id);else if(g.draw)this.finish(room,'draw');
+ }
  action(id,input){
   const s=this.store;if(!input||typeof input!=='object'||!/^[-a-zA-Z0-9_]{12,100}$/.test(input.opId||''))fail('缺少有效操作编号',400);
   const fingerprint=createHash('sha256').update(JSON.stringify(input)).digest('hex');
@@ -53,12 +69,16 @@ class Service {
    const previous=s.get('SELECT fingerprint FROM operations WHERE user_id=? AND id=?',id,input.opId);if(previous){if(previous.fingerprint!==fingerprint)fail('操作编号不能重复用于其他请求',400);return}
    this.execute(id,input);
    s.run('INSERT INTO operations VALUES (?,?,?,?)',id,input.opId,fingerprint,this.now());
-  });return this.snapshot(id);
+  });this.aiManager?.sync();return this.snapshot(id);
  }
  execute(id,input){
   const s=this.store,now=this.now();
   if(input.type==='profile'){const nick=typeof input.nickname==='string'?input.nickname.trim():'';if([...nick].length<2||[...nick].length>20)fail('昵称应为2～20个字符',400);s.run('UPDATE users SET nickname=? WHERE id=?',nick,id);return}
   if(!this.online(id))fail('请等待连接恢复后再操作');
+  if(input.type==='create-ai'){
+   if(s.roomFor(id))fail('请先离开当前房间');
+   this.createAI(id,input.difficulty,input.color);return;
+  }
   if(input.type==='create'){if(s.roomFor(id))fail('请先离开当前房间');this.createRoom(id);return}
   if(input.type==='join'){
    if(typeof input.code!=='string'||!/^\d{6}$/.test(input.code))fail('请输入六位房间码',400);const current=s.roomFor(id);if(current){if(current.code===input.code)return;fail('请先离开当前房间')}
@@ -80,10 +100,24 @@ class Service {
   const room=s.roomFor(id);if(!room)fail('你尚未进入房间');
   if(input.roomCode!==room.code||input.gameId!==room.game.id)fail('棋局已变化，请刷新状态后重试');
   // Resignation and leaving must remain possible after an opponent's recent move.
-  if(!['resign','leave'].includes(input.type)&&input.version!==room.version)fail('对局状态已更新，请重试');
+  if(!['resign','leave'].includes(input.type)&&!(room.mode==='ai'&&['undo-ai','restart-ai','retry-ai'].includes(input.type))&&input.version!==room.version)fail('对局状态已更新，请重试');
   const color=room.players.indexOf(id)+1,g=room.game;
   if(input.type==='leave'){this.leave(id,input.confirmed);return}
   if(input.type==='resign'){if(input.confirmed!==true)fail('请先确认投降',400);this.finish(room,'resign',color===1?2:1,id);s.saveRoom(room);return}
+  if(room.mode==='ai'){
+   if(input.type==='retry-ai'){this.aiManager?.retry(room.code);return}
+   if(input.type==='undo-ai'){
+    if(room.phase!=='playing'||!g.history.some(m=>m.color===color))fail('没有可撤回的玩家落子');
+    const removed=[];do{const last=g.history.pop();g.board[last.row*15+last.col]=0;removed.push(last.id);if(last.color===color)break}while(g.history.length);
+    g.events.push({id:randomUUID(),type:'undo',actor:id,removedMoves:removed,at:now});s.saveRoom(room);return;
+   }
+   if(input.type==='restart-ai'){
+    if(input.confirmed!==true)fail('请确认重新开始',400);
+    if(room.phase==='playing')this.finish(room,'restart',0,id);
+    this.resetAI(room,id);s.saveRoom(room);return;
+   }
+   if(input.type!=='move')fail('人机模式不支持此操作');
+  }
   if(input.type==='cancel'){
    const pending=room.pending;
    if(!pending||pending.id!==input.requestId||pending.expiresAt<=now)fail('申请已失效');
@@ -118,20 +152,19 @@ class Service {
   }else if(input.type==='move'){
    if(room.phase!=='playing'||room.pending)fail('现在不能落子');if(g.history.length%2+1!==color)fail('还没轮到你');if(input.ply!==g.history.length)fail('步数已变化，请重试');
    if(!Number.isInteger(input.row)||!Number.isInteger(input.col)||input.row<0||input.row>14||input.col<0||input.col>14)fail('落子坐标无效',400);
-   const game=engine(g);if(!game.play(input.row,input.col))fail('这里已有棋子');Object.assign(g,{board:game.board,history:game.history,winner:game.winner,line:game.line,draw:game.draw});
-   Object.assign(g.history.at(-1),{id:randomUUID(),at:now,ply:g.history.length,playerId:id});g.events.push({type:'move',...g.history.at(-1)});
-   if(g.winner)this.finish(room,'five',g.winner,id);else if(g.draw)this.finish(room,'draw');
+   this.place(room,input.row,input.col,color,id);
   }else fail('未知操作',400);
   s.saveRoom(room);
  }
- history(id,page=1,result='all'){
+ history(id,page=1,result='all',mode='all'){
   const s=this.store;let where='(black_id=? OR white_id=?)',args=[id,id];
+  if(mode!=='all'){if(!['ai','online'].includes(mode))fail('对局类型无效',400);where+=' AND mode=?';args.push(mode)}
   if(result==='win'){where+=' AND winner_id=?';args.push(id)}
   else if(result==='loss'){where+=' AND winner_id IS NOT NULL AND winner_id!=?';args.push(id)}
   else if(result==='draw'||result==='restart'){where+=' AND reason=?';args.push(result)}
   else if(result!=='all')fail('筛选条件无效',400);
   const total=s.get('SELECT COUNT(*) AS count FROM matches WHERE '+where,...args).count;
-  const items=s.all('SELECT payload FROM matches WHERE '+where+' ORDER BY ended_at DESC,id DESC LIMIT 10 OFFSET ?',...args,(page-1)*10).map(row=>{const g=JSON.parse(row.payload);const color=g.participants.findIndex(p=>p.id===id)+1;return {id:g.id,participants:g.participants,color,result:g.reason==='restart'?'restart':g.draw?'draw':g.winner===color?'win':'loss',reason:g.reason,startedAt:g.startedAt,endedAt:g.endedAt,moves:g.history.length}});
+  const items=s.all('SELECT payload FROM matches WHERE '+where+' ORDER BY ended_at DESC,id DESC LIMIT 10 OFFSET ?',...args,(page-1)*10).map(row=>{const g=JSON.parse(row.payload);const color=g.participants.findIndex(p=>p.id===id)+1;return {id:g.id,participants:g.participants,color,mode:g.mode||'online',difficulty:g.difficulty,result:g.reason==='restart'?'restart':g.draw?'draw':g.winner===color?'win':'loss',reason:g.reason,startedAt:g.startedAt,endedAt:g.endedAt,moves:g.history.length}});
   return {items,total,page,pages:Math.max(1,Math.ceil(total/10))};
  }
  replay(id,matchId){const row=this.store.get('SELECT payload FROM matches WHERE id=? AND (black_id=? OR white_id=?)',matchId,id,id);if(!row)fail('对局不存在或无权访问',404);return JSON.parse(row.payload)}

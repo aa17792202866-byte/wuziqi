@@ -1,6 +1,7 @@
 const $=id=>document.getElementById(id);
 const el=(tag,text,className)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(className)node.className=className;return node};
-const labels={idle:'空闲',waiting:'等待对手',preparing:'准备中',playing:'对局中',ended:'对局结束',reconnecting:'连接中'};
+const difficultyLabels={easy:'简单',normal:'普通',hard:'困难'};
+const labels={ai:'人机对战中',idle:'空闲',waiting:'等待对手',preparing:'准备中',playing:'对局中',ended:'对局结束',reconnecting:'连接中'};
 const resultLabels={win:'胜',loss:'负',draw:'平',restart:'重开'};
 const reasonLabels={five:'五子连线',resign:'投降',draw:'棋盘下满 · 平局',restart:'双方同意重开'};
 const kindLabels={swap:'交换先手',undo:'撤回最近一步',restart:'重新开始'};
@@ -33,7 +34,7 @@ function applyState(next){
  state=next;clockOffset=next.serverTime-Date.now();
  const notification=next.notifications.find(n=>n.id>lastNotification);if(notification)toast(notification.message);lastNotification=Math.max(lastNotification,next.notifications[0]?.id||0);
  if(view==='auth')view=next.room?'room':'lobby';
- else if(!previousRoom&&next.room&&view==='lobby')view='room';
+ else if(!previousRoom&&next.room&&['lobby','ai'].includes(view))view='room';
  if(view==='room'&&!next.room)view='lobby';
  render();
 }
@@ -51,9 +52,9 @@ function disable(id,value,reason=''){const node=$(id);node.disabled=!!value||bus
 function name(player){return player?.nickname||'等待加入'}
 function dateText(time){return new Date(time).toLocaleString('zh-CN',{hour12:false})}
 function duration(ms){const seconds=Math.max(0,Math.floor(ms/1000));return String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0')}
-function endText(game){if(game.reason==='restart')return '双方同意重开';if(game.reason==='draw')return '棋逢对手，平局';const winner=game.winner===1?'黑方':'白方';return game.reason==='resign'?(game.winner===1?'白方':'黑方')+'投降，'+winner+'获胜':winner+'获胜！'}
+function endText(game){if(game.reason==='restart')return game.mode==='ai'?'玩家重新开始':'双方同意重开';if(game.reason==='draw')return '棋逢对手，平局';const winner=game.winner===1?'黑方':'白方';return game.reason==='resign'?(game.winner===1?'白方':'黑方')+'投降，'+winner+'获胜':winner+'获胜！'}
 function render(){
- for(const page of ['auth','lobby','room','history','replay'])$(page+'-view').hidden=page!==view;
+ for(const page of ['auth','ai','lobby','room','history','replay'])$(page+'-view').hidden=page!==view;
  $('nav').hidden=$('account-bar').hidden=!state;$('guest-label').hidden=!!state;
  $('current-room').hidden=!state?.room;
  document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('selected',b.dataset.view===view));
@@ -72,6 +73,7 @@ function renderLobby(){
  }
  if(!state.players.length)list.append(el('p','正在获取在线棋友…','empty'));
  if(state.players.length===1)list.append(el('p','还没有其他棋友在线。\n让好友打开下方局域网地址并登录。','empty'));
+ disable('open-ai',!connected||!!state.room,'请先离开当前房间');
  disable('create-room',!connected||!!state.room,'请连接后操作；已有房间时请先离开');$('join-form').querySelector('button').disabled=busy||!connected||!!state.room;
  $('lobby-room-note').textContent=state.room?'你正在房间 '+state.room.code+'，可点击顶部「当前对局」返回。':'';
  const invites=$('invite-list');invites.replaceChildren();
@@ -79,17 +81,21 @@ function renderLobby(){
  if(!state.invitations.length)invites.append(el('p','暂无待处理邀请','muted'));tick();
 }
 function renderRoom(){
- const r=state.room,g=r.game,both=r.players.every(p=>p?.online),preparing=r.phase==='preparing',playing=r.phase==='playing',ended=r.phase==='ended';
- $('room-code-label').textContent='房间 '+r.code+' / 你执'+(r.myColor===1?'黑':'白');$('room-heading').textContent=labels[r.phase];
+ const r=state.room,g=r.game,both=r.players.every(p=>p?.online),preparing=r.phase==='preparing',playing=r.phase==='playing',ended=r.phase==='ended',ai=r.mode==='ai';
+ $('room-code-label').textContent=(ai?'人机 · '+difficultyLabels[r.difficulty]:'房间 '+r.code)+' / 你执'+(r.myColor===1?'黑':'白');$('room-heading').textContent=ai?'人机对战':labels[r.phase];
  $('phase').textContent=ended?'本局结束':preparing?'双方准备后开局':playing&&r.turn===r.myColor?'轮到你了':'静候好棋';
- $('game-status').textContent=ended?endText(g):r.phase==='waiting'?'等待好友加入':!both?'等待对手连接':preparing?'准备好了吗？':(r.turn===1?'黑方':'白方')+'落子';
- $('game-hint').textContent=ended?'棋谱已保存，可复盘或邀请对方再来一局。':r.phase==='waiting'?'把六位房间码发给好友，即可相约。':!both?'双方连接后继续；对局中仍可主动投降。':r.pending?'请先处理申请，再继续对弈。':preparing?'可在开局前交换先手，交换后需重新准备。':r.turn===r.myColor?'点击空白交叉点落子。':'对方正在思考。';
+ $('game-status').textContent=ai&&playing&&r.turn!==r.myColor?'电脑思考中':ended?endText(g):r.phase==='waiting'?'等待好友加入':!both?'等待对手连接':preparing?'准备好了吗？':(r.turn===1?'黑方':'白方')+'落子';
+ $('game-hint').textContent=r.aiError?r.aiError:ai&&playing&&r.turn!==r.myColor?'电脑正在计算下一手，可悔棋或主动投降。':ended?'棋谱已保存，可复盘或邀请对方再来一局。':r.phase==='waiting'?'把六位房间码发给好友，即可相约。':!both?'双方连接后继续；对局中仍可主动投降。':r.pending?'请先处理申请，再继续对弈。':preparing?'可在开局前交换先手，交换后需重新准备。':r.turn===r.myColor?'点击空白交叉点落子。':'对方正在思考。';
  const players=$('room-players');players.replaceChildren();r.players.forEach((p,index)=>{const row=el('div',undefined,'room-player'+(playing&&r.turn===index+1?' active':''));row.append(el('span',undefined,'stone '+(index===0?'black':'white')));const text=el('div');text.append(el('p',name(p)+(p?.id===state.me.id?'（你）':'')),el('small',(index===0?'黑棋 · 先手':'白棋 · 后手')+' / '+(!p?'空位':!p.online?'离线':preparing?(r.ready[index]?'已准备':'未准备'):'在线')));row.append(text);players.append(row)});
  $('moves').textContent=String(g.history.length).padStart(2,'0');const last=g.history.at(-1);$('last-move').textContent=last?`上一手 · ${last.row+1}行 ${last.col+1}列`:'等待第一手';
  $('prepare-controls').hidden=!preparing;$('game-controls').hidden=!playing&&!ended;
  $('ready').textContent=r.ready[r.myColor-1]?'取消准备':'准备';disable('ready',!connected||!both||!!r.pending,'双方在线且无待处理申请时才可准备');
  $('swap').textContent=r.myColor===1?'让对方先手':'申请先手';disable('swap',!connected||!both||(!!r.pending&&r.myColor!==1),'等待双方在线或申请处理完成');
- disable('undo',!connected||!both||!playing||!g.history.length||!!r.pending,'仅对局中有落子且无待处理申请时可悔棋');
+ disable('undo',!connected||!both||!playing||(ai?!g.history.some(m=>m.color===r.myColor):!g.history.length)||!!r.pending,ai?'没有可撤回的玩家落子，电脑开局落子不可单独撤回':'仅对局中有落子且无待处理申请时可悔棋');
+ $('restart').textContent=ai&&ended?'再来一局':'重新开始';$('retry-ai').hidden=!r.aiError;disable('retry-ai',!connected); 
+ $('leave-room').textContent=ai?'返回大厅':'离开房间';
+ document.querySelector('.rules p:last-child').textContent=ai?'悔棋恢复到你上次落子之前。重新开始只需自己确认。':'悔棋与重开需要对方同意。投降由自己确认，立即结束本局。';
+ if(ai&&ended)$('game-hint').textContent='棋谱已保存，可复盘、再来一局或返回大厅调整设置。';
  disable('restart',!connected||!both||!!r.pending,'双方在线且无待处理申请时可请求重开');
  $('resign').hidden=!playing;disable('resign',!connected,'等待自己的连接恢复');$('view-result').hidden=!ended;
  disable('leave-room',!connected,'等待连接恢复');
@@ -105,8 +111,8 @@ function makeBoard(container,replaying){const cells=[];for(let row=0;row<15;row+
 function drawBoard(cells,board,moves,line,enabled,numbers){const order=new Map(moves.map((m,i)=>[m.row*15+m.col,i+1]));const last=moves.at(-1);cells.forEach((cell,i)=>{const color=board[i],key=color+':'+(numbers?order.get(i):'');if(cell.dataset.piece!==key){cell.dataset.piece=key;cell.replaceChildren();if(color)cell.append(el('span',numbers?String(order.get(i)):'','stone '+(color===1?'black':'white')))}cell.classList.toggle('occupied',!!color);cell.classList.toggle('latest',!!last&&i===last.row*15+last.col);cell.classList.toggle('winner',line.includes(i));cell.setAttribute('aria-label',`${Math.floor(i/15)+1}行${i%15+1}列，${color?(color===1?'黑棋':'白棋'):'空位'}`);cell.setAttribute('aria-disabled',String(!enabled||!!color))});$('board').classList.toggle('show-numbers',$('numbers').checked)}
 const boardCells=makeBoard($('board'),false),replayCells=makeBoard($('replay-board'),true);
 function tick(){const now=Date.now()+clockOffset;document.querySelectorAll('[data-expires]').forEach(node=>node.textContent=Math.max(0,Math.ceil((Number(node.dataset.expires)-now)/1000))+' 秒后过期');const g=state?.room?.game;if(g)$('time').textContent=g.startedAt===null?'00:00':duration((g.endedAt||now)-g.startedAt)}
-async function loadHistory(){const generation=++historyGeneration;const list=$('history-list');list.replaceChildren(el('p','正在读取棋谱…','empty'));try{const result=await api(`/api/history?page=${historyPage}&result=${$('history-filter').value}`);if(generation!==historyGeneration)return;list.replaceChildren();for(const match of result.items){const row=el('article',undefined,'card history-item');row.append(el('span',resultLabels[match.result],'result-badge '+match.result));const content=el('div',undefined,'history-content');const other=match.participants.find(p=>p.id!==state.me.id);content.append(el('strong','对阵 '+name(other)),el('p',`${dateText(match.startedAt)} · ${match.color===1?'执黑':'执白'} · ${match.moves} 手`),el('p',reasonLabels[match.reason]+' · 用时 '+duration(match.endedAt-match.startedAt)));row.append(content,button('复盘',()=>openReplay(match.id)));list.append(row)}if(!result.items.length)list.append(el('p','这里还没有棋谱。完成一局后，就能回来复盘。','card empty'));$('history-page').textContent=`第 ${result.page} / ${result.pages} 页 · 共 ${result.total} 局`;$('history-prev').disabled=result.page<=1;$('history-next').disabled=result.page>=result.pages}catch(e){list.replaceChildren(el('p','读取失败，可切换筛选或重新进入此页重试。','empty'));showError(e.message)}}
-async function openReplay(id){try{replay=await api('/api/history/'+id);replayIndex=0;navigate('replay');$('replay-title').textContent=name(replay.participants[0])+' vs '+name(replay.participants[1]);$('replay-meta').textContent=dateText(replay.startedAt)+' · 共 '+replay.history.length+' 手 · '+reasonLabels[replay.reason];$('replay-range').max=replay.history.length;const list=$('replay-moves');list.replaceChildren();replay.history.forEach((m,i)=>list.append(button(`${i+1}. ${m.color===1?'黑':'白'} ${m.row+1},${m.col+1}`,()=>setReplayStep(i+1))));const events=$('replay-events');events.replaceChildren();const eventLabels={start:'开始对局',undo:'悔棋',five:'五子连线结束',resign:'投降',draw:'平局',restart:'双方重开'};for(const event of replay.events.filter(e=>e.type!=='move'))events.append(el('p',dateText(event.at)+' · '+(eventLabels[event.type]||event.type)));renderReplay()}catch(e){showError(e.message)}}
+async function loadHistory(){const generation=++historyGeneration;const list=$('history-list');list.replaceChildren(el('p','正在读取棋谱…','empty'));try{const result=await api(`/api/history?page=${historyPage}&result=${$('history-filter').value}&mode=${$('history-mode').value}`);if(generation!==historyGeneration)return;list.replaceChildren();for(const match of result.items){const row=el('article',undefined,'card history-item');row.append(el('span',resultLabels[match.result],'result-badge '+match.result));const content=el('div',undefined,'history-content');const other=match.participants.find(p=>p.id!==state.me.id);content.append(el('strong','对阵 '+name(other)+(match.mode==='ai'?' · '+difficultyLabels[match.difficulty]:' · 联机')),el('p',`${dateText(match.startedAt)} · ${match.color===1?'执黑':'执白'} · ${match.moves} 手`),el('p',(match.mode==='ai'&&match.reason==='restart'?'玩家重新开始':reasonLabels[match.reason])+' · 用时 '+duration(match.endedAt-match.startedAt)));row.append(content,button('复盘',()=>openReplay(match.id)));list.append(row)}if(!result.items.length)list.append(el('p','这里还没有棋谱。完成一局后，就能回来复盘。','card empty'));$('history-page').textContent=`第 ${result.page} / ${result.pages} 页 · 共 ${result.total} 局`;$('history-prev').disabled=result.page<=1;$('history-next').disabled=result.page>=result.pages}catch(e){list.replaceChildren(el('p','读取失败，可切换筛选或重新进入此页重试。','empty'));showError(e.message)}}
+async function openReplay(id){try{replay=await api('/api/history/'+id);replayIndex=0;navigate('replay');$('replay-title').textContent=name(replay.participants[0])+' vs '+name(replay.participants[1]);$('replay-meta').textContent=dateText(replay.startedAt)+' · 共 '+replay.history.length+' 手 · '+(replay.mode==='ai'?'人机 · '+difficultyLabels[replay.difficulty]+' · ':'')+(replay.mode==='ai'&&replay.reason==='restart'?'玩家重新开始':reasonLabels[replay.reason]);$('replay-range').max=replay.history.length;const list=$('replay-moves');list.replaceChildren();replay.history.forEach((m,i)=>list.append(button(`${i+1}. ${m.color===1?'黑':'白'} ${m.row+1},${m.col+1}`,()=>setReplayStep(i+1))));const events=$('replay-events');events.replaceChildren();const eventLabels={start:'开始对局',undo:'悔棋',five:'五子连线结束',resign:'投降',draw:'平局',restart:'双方重开'};for(const event of replay.events.filter(e=>e.type!=='move'))events.append(el('p',dateText(event.at)+' · '+(eventLabels[event.type]||event.type)));renderReplay()}catch(e){showError(e.message)}}
 function renderReplay(){if(!replay)return;const moves=replay.history.slice(0,replayIndex),board=Array(225).fill(0);for(const m of moves)board[m.row*15+m.col]=m.color;const terminal=replayIndex===replay.history.length;drawBoard(replayCells,board,moves,terminal?replay.line:[],false,true);$('replay-step').textContent=`第 ${replayIndex} / ${replay.history.length} 手`;$('replay-range').value=replayIndex;$('replay-result').textContent=terminal?endText(replay):'棋局回放';const last=moves.at(-1);$('replay-current').textContent=last?`${last.color===1?'黑':'白'}方 · ${last.row+1}行 ${last.col+1}列 · ${dateText(last.at)}`:'开局，黑棋先行';$('replay-first').disabled=$('replay-prev').disabled=replayIndex===0;$('replay-last').disabled=$('replay-next').disabled=terminal;$('replay-play').disabled=!replay.history.length;$('replay-moves').querySelectorAll('button').forEach((b,i)=>b.classList.toggle('selected',i===replayIndex-1))}
 function stopPlayback(){clearInterval(playTimer);playTimer=null;$('replay-play').textContent='播放'}
 function setReplayStep(step,automatic=false){if(!automatic)stopPlayback();replayIndex=Math.max(0,Math.min(replay.history.length,step));renderReplay();if(replayIndex===replay.history.length)stopPlayback()}
@@ -120,10 +126,10 @@ $('open-invites').onclick=()=>navigate('lobby');
 $('create-room').onclick=()=>act({type:'create'});$('join-form').onsubmit=e=>{e.preventDefault();act({type:'join',code:$('room-code').value.trim()})};
 $('leave-room').onclick=()=>{const playing=state.room.phase==='playing';if(!confirm(playing?'离开将按投降处理，确认离开？':'确认离开当前房间？'))return;act({type:'leave',confirmed:playing})};
 $('ready').onclick=()=>act({type:'ready',ready:!state.room.ready[state.room.myColor-1]});$('swap').onclick=()=>act(state.room.myColor===1?{type:'swap'}:{type:'request',kind:'swap'});
-$('undo').onclick=()=>act({type:'request',kind:'undo'});$('restart').onclick=()=>act({type:'request',kind:'restart'});
+$('undo').onclick=()=>act(state.room.mode==='ai'?{type:'undo-ai'}:{type:'request',kind:'undo'});$('restart').onclick=()=>{if(state.room.mode==='ai'){if(confirm('确认重新开始？当前进行中的棋局将作为重开结束保存。'))act({type:'restart-ai',confirmed:true})}else act({type:'request',kind:'restart'})};
 $('resign').onclick=()=>{if(confirm('确认投降？确认后本局立即结束，对方获胜。'))act({type:'resign',confirmed:true})};
 $('accept').onclick=()=>act({type:'respond',requestId:state.room.pending.id,accept:true});$('reject').onclick=()=>act({type:'respond',requestId:state.room.pending.id,accept:false});$('cancel-request').onclick=()=>act({type:'cancel',requestId:state.room.pending.id});$('numbers').onchange=render;
-$('view-result').onclick=()=>openReplay(state.room.game.id);$('history-filter').onchange=()=>{historyPage=1;loadHistory()};$('history-prev').onclick=()=>{historyPage--;loadHistory()};$('history-next').onclick=()=>{historyPage++;loadHistory()};$('back-history').onclick=()=>navigate('history');
+$('view-result').onclick=()=>openReplay(state.room.game.id);$('history-mode').onchange=()=>{historyPage=1;loadHistory()};$('history-filter').onchange=()=>{historyPage=1;loadHistory()};$('history-prev').onclick=()=>{historyPage--;loadHistory()};$('history-next').onclick=()=>{historyPage++;loadHistory()};$('back-history').onclick=()=>navigate('history');
 $('replay-first').onclick=()=>setReplayStep(0);$('replay-prev').onclick=()=>setReplayStep(replayIndex-1);$('replay-next').onclick=()=>setReplayStep(replayIndex+1);$('replay-last').onclick=()=>setReplayStep(replay.history.length);$('replay-range').oninput=e=>setReplayStep(Number(e.target.value));$('replay-play').onclick=startPlayback;$('replay-speed').onchange=()=>{if(playTimer){stopPlayback();startPlayback()}};
 window.addEventListener('keydown',e=>{if(view==='replay'&&!['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)&&['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();setReplayStep(replayIndex+(e.key==='ArrowRight'?1:-1))}});
 $('nickname-button').onclick=()=>{$('new-nickname').value=state.me.nickname;$('nickname-dialog').showModal()};$('close-nickname').onclick=()=>$('nickname-dialog').close();$('nickname-form').onsubmit=async e=>{e.preventDefault();if(await act({type:'profile',nickname:$('new-nickname').value}))$('nickname-dialog').close()};
@@ -131,4 +137,7 @@ $('dismiss-error').onclick=()=>showError('');$('retry').onclick=()=>{if(retryPay
 api('/api/info').then(info=>{for(const address of info.addresses){const link=el('a',address);link.href=address;$('lan-addresses').append(link)}}).catch(()=>{});
 setInterval(tick,500);setAuthMode(false);render();initialize();
 
+
+
+$('open-ai').onclick=()=>navigate('ai');$('ai-back').onclick=()=>navigate('lobby');$('ai-form').onsubmit=async e=>{e.preventDefault();await act({type:'create-ai',difficulty:$('ai-difficulty').value,color:$('ai-color').value})};$('retry-ai').onclick=()=>act({type:'retry-ai'});
 
