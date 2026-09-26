@@ -21,7 +21,7 @@ function createServer(options={}){
  const aiManager=new AIManager(service);service.aiManager=aiManager;
  const limits=new Map();let closing=false,authJobs=0;
  const now=options.now||Date.now;
- const files={'/':'index.html','/index.html':'index.html','/style.css':'style.css','/game.js':'game.js','/app.js':'app.js'};
+ const files={'/':'index.html','/index.html':'index.html','/style.css':'style.css','/theme.js':'theme.js','/game.js':'game.js','/app.js':'app.js'};
  const json=(res,status,value)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(value))};
  function rate(key,max,window=60000){let item=limits.get(key);if(!item||now()>item.until){item={count:0,until:now()+window};limits.set(key,item)}if(++item.count>max)fail('操作过于频繁，请稍后重试',429)}
  async function body(req){let text='';for await(const chunk of req){text+=chunk;if(Buffer.byteLength(text)>8192)fail('请求过大',413)}let value;try{value=JSON.parse(text||'{}')}catch{fail('请求格式错误',400)}if(!value||typeof value!=='object'||Array.isArray(value))fail('请求格式错误',400);return value}

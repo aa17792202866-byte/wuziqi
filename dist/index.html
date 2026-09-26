@@ -4,10 +4,10 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>对弈 · 联机五子棋</title><meta name="description" content="邀请好友对弈，收藏每一局。局域网双人五子棋。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23c79559'/%3E%3Ccircle cx='12' cy='12' r='7' fill='%23252624'/%3E%3Ccircle cx='22' cy='22' r='7' fill='%23fffaf0'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="style.css"><script src="app.js" defer></script>
+<script src="theme.js"></script><link rel="stylesheet" href="style.css"><script src="app.js" defer></script>
 </head>
 <body>
-<header class="shell"><a class="brand" href="/" aria-label="对弈首页"><span class="logo">●<i>●</i></span>对弈 <small>五子棋</small></a><nav id="nav" hidden><button data-view="lobby">大厅</button><button id="current-room" data-view="room" hidden>当前对局</button><button data-view="history">我的对局</button></nav><div id="account-bar" hidden><button id="nickname-button"></button><button id="logout" class="quiet">退出</button></div><span id="guest-label" class="muted">双人联机 · 每一局都值得回味</span></header>
+<header class="shell"><a class="brand" href="/" aria-label="对弈首页"><span class="logo">●<i>●</i></span>对弈 <small>五子棋</small></a><nav id="nav" hidden><button data-view="lobby">大厅</button><button id="current-room" data-view="room" hidden>当前对局</button><button data-view="history">我的对局</button></nav><div id="account-bar" hidden><button id="nickname-button"></button><button id="logout" class="quiet">退出</button></div><span id="guest-label" class="muted">双人联机 · 每一局都值得回味</span><button id="theme-toggle" class="theme-toggle" type="button" aria-label="切换为深色模式"><span class="theme-icon" aria-hidden="true">☾</span><span class="theme-label">深色</span></button></header>
 <div class="shell banners"><p id="connection" role="status" hidden></p><div id="error" role="alert" hidden><span id="error-text"></span><button id="retry" hidden>重试保存</button><button id="dismiss-error" aria-label="关闭提示">×</button></div><p id="toast" role="status" hidden></p><div id="incoming-alert" hidden><span id="incoming-text"></span><button id="open-invites">查看邀请</button></div></div>
 <main class="shell">
 <section id="auth-view" class="auth-layout" hidden>
