@@ -12,7 +12,7 @@ class AIManager{
     if(!Number.isInteger(index)||index<0||index>224||fresh.game.board[index])index=tactical(fresh.game.board,3-fresh.humanColor)??fresh.game.board.findIndex(v=>!v);
     job.result=index;if(this.service.online(id))this.commit(fresh,job);
    };
-   job.worker.once('message',result=>complete(result.index));job.worker.once('error',()=>complete(-1));job.worker.once('exit',()=>complete(-1));job.timer=setTimeout(()=>complete(-1),1600);
+   job.worker.once('message',result=>complete(result.index));job.worker.once('error',()=>complete(-1));job.worker.once('exit',()=>complete(-1));job.timer=setTimeout(()=>complete(-1),2400);
   }
  }
  commit(room,job){try{this.service.changed(()=>{const fresh=this.service.store.room(room.code);if(!fresh||this.signature(fresh)!==job.key||!this.service.online(fresh.players[fresh.humanColor-1]))return;this.service.place(fresh,Math.floor(job.result/15),job.result%15,3-fresh.humanColor,'computer');this.service.store.saveRoom(fresh)});this.jobs.delete(room.code);this.errors.delete(room.code)}catch{this.jobs.delete(room.code);this.errors.set(room.code,'电脑落子保存失败，棋局已保留，请重试。');this.service.broadcast()}}
@@ -20,3 +20,4 @@ class AIManager{
  close(){this.closed=true;for(const j of this.jobs.values()){clearTimeout(j.timer);j.worker.terminate()}this.jobs.clear()}
 }
 module.exports={AIManager};
+
