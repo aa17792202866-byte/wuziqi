@@ -27,6 +27,17 @@
 
 密码使用带独立随机盐的 scrypt 哈希，登录使用 HttpOnly、SameSite Cookie。所有房间操作和历史访问由服务器校验。每一步确认后保存在 SQLite，服务重启可恢复棋盘；未开始的准备状态和申请会清除。
 
+### 本地账号管理
+
+在服务器电脑的项目目录打开 PowerShell，可交互式创建账号或重置密码：
+
+```powershell
+npm run user:create
+npm run user:reset -- 账号
+```
+
+密码输入不会显示明文。重置密码会注销该账号已有的登录状态，但不会删除历史对局。
+
 数据备份运行 `npm run backup`。数据结构、备份恢复和升级说明见 `DATABASE.md`。
 
 ## 验证
